@@ -47,13 +47,18 @@
 - (void)reloadData {
     self.keyWindow = UIApplication.sharedApplication.keyWindow;
     self.windows = UIApplication.sharedApplication.windows;
-    self.keyWindowSubtitle = self.windowSubtitles[[self.windows indexOfObject:self.keyWindow]];
     self.windowSubtitles = [self.windows flex_mapped:^id(UIWindow *window, NSUInteger idx) {
         return [NSString stringWithFormat:@"Level: %@ — Root: %@",
             @(window.windowLevel), window.rootViewController
         ];
     }];
-    
+    NSUInteger keyWindowIndex = [self.windows indexOfObject:self.keyWindow];
+    if (keyWindowIndex != NSNotFound && keyWindowIndex < self.windowSubtitles.count) {
+        self.keyWindowSubtitle = self.windowSubtitles[keyWindowIndex];
+    } else {
+        self.keyWindowSubtitle = nil;
+    }
+
     if (@available(iOS 13, *)) {
         self.scenes = UIApplication.sharedApplication.connectedScenes.allObjects;
         self.sceneSubtitles = [self.scenes flex_mapped:^id(UIScene *scene, NSUInteger idx) {
