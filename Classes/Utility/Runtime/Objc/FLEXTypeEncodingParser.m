@@ -534,8 +534,11 @@ BOOL FLEXGetSizeAndAlignment(const char *type, NSUInteger *sizep, NSUInteger *al
 - (BOOL)canScanString:(NSString *)str {
     NSScanner *scan = self.scan;
     NSUInteger len = str.length;
+    if (scan.scanLocation + len > scan.string.length) {
+        return NO;
+    }
     unichar buff1[len], buff2[len];
-    
+
     [str getCharacters:buff1];
     [scan.string getCharacters:buff2 range:NSMakeRange(scan.scanLocation, len)];
     if (memcmp(buff1, buff2, len) == 0) {

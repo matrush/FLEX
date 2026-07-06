@@ -1040,14 +1040,14 @@ typedef NS_ENUM(NSUInteger, FLEXExplorerMode) {
         frame.origin.y += 1.0 / UIScreen.mainScreen.scale;
         self.selectedView.frame = frame;
     } else if (self.currentMode == FLEXExplorerModeSelect && self.viewsAtTapPoint.count > 0) {
-        NSInteger selectedViewIndex = [self.viewsAtTapPoint indexOfObject:self.selectedView];
-        if (selectedViewIndex > 0) {
+        NSUInteger selectedViewIndex = [self.viewsAtTapPoint indexOfObject:self.selectedView];
+        if (selectedViewIndex != NSNotFound && selectedViewIndex > 0) {
             self.selectedView = [self.viewsAtTapPoint objectAtIndex:selectedViewIndex - 1];
         }
     } else {
         return NO;
     }
-    
+
     return YES;
 }
 
@@ -1057,8 +1057,8 @@ typedef NS_ENUM(NSUInteger, FLEXExplorerMode) {
         frame.origin.y -= 1.0 / UIScreen.mainScreen.scale;
         self.selectedView.frame = frame;
     } else if (self.currentMode == FLEXExplorerModeSelect && self.viewsAtTapPoint.count > 0) {
-        NSInteger selectedViewIndex = [self.viewsAtTapPoint indexOfObject:self.selectedView];
-        if (selectedViewIndex < self.viewsAtTapPoint.count - 1) {
+        NSUInteger selectedViewIndex = [self.viewsAtTapPoint indexOfObject:self.selectedView];
+        if (selectedViewIndex != NSNotFound && selectedViewIndex < self.viewsAtTapPoint.count - 1) {
             self.selectedView = [self.viewsAtTapPoint objectAtIndex:selectedViewIndex + 1];
         }
     } else {
