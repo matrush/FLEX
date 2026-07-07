@@ -38,6 +38,9 @@ typedef NSURLSessionTask * (^NSURLSessionNewTaskMethod)(NSURLSession *, id, NSUR
 
 @property (nonatomic, copy) NSURLRequest *request;
 @property (nonatomic) NSMutableData *dataAccumulator;
+/// Set when the response body will never be cached by the recorder,
+/// either because of its MIME type or because it grew past the cache limit
+@property (nonatomic) BOOL dataAccumulationDisabled;
 
 @end
 
@@ -983,6 +986,25 @@ static FIRDocumentReference * _logos_method$_ungrouped$FIRCollectionReference$ad
     return [NSString stringWithFormat:@"+[%@ %@]", NSStringFromClass(class), NSStringFromSelector(selector)];
 }
 
+/// Returns nil for files over the recorder's cache limit, since their
+/// bodies will never be cached; \c length is set to the file size regardless.
++ (NSData *)dataForDownloadedFile:(NSURL *)location length:(int64_t *)length {
+    NSDictionary<NSFileAttributeKey, id> *attributes = [NSFileManager.defaultManager
+        attributesOfItemAtPath:location.path error:NULL
+    ];
+    unsigned long long fileSize = attributes.fileSize;
+    if (length) {
+        *length = (int64_t)fileSize;
+    }
+
+    NSUInteger cacheLimit = FLEXNetworkRecorder.defaultRecorder.responseCacheByteLimit;
+    if (cacheLimit > 0 && fileSize > cacheLimit) {
+        return nil;
+    }
+
+    return [NSData dataWithContentsOfURL:location options:NSDataReadingMappedIfSafe error:NULL];
+}
+
 + (NSURLSessionAsyncCompletion)asyncCompletionWrapperForRequestID:(NSString *)requestID
                                                         mechanism:(NSString *)mechanism
                                                        completion:(NSURLSessionAsyncCompletion)completion {
@@ -994,15 +1016,17 @@ static FIRDocumentReference * _logos_method$_ungrouped$FIRCollectionReference$ad
         ];
         
         NSData *data = nil;
+        int64_t dataLength = 0;
         if ([fileURLOrData isKindOfClass:[NSURL class]]) {
-            data = [NSData dataWithContentsOfURL:fileURLOrData];
+            data = [self dataForDownloadedFile:fileURLOrData length:&dataLength];
         } else if ([fileURLOrData isKindOfClass:[NSData class]]) {
             data = fileURLOrData;
+            dataLength = data.length;
         }
-        
+
         [FLEXNetworkRecorder.defaultRecorder
             recordDataReceivedWithRequestID:requestID
-            dataLength:data.length
+            dataLength:dataLength
         ];
         
         if (error) {
@@ -1535,7 +1559,7 @@ static FIRDocumentReference * _logos_method$_ungrouped$FIRCollectionReference$ad
                                                  NSURLSession *session,
                                                  NSURLSessionDownloadTask *task,
                                                  NSURL *location) {
-        NSData *data = [NSData dataWithContentsOfFile:location.relativePath];
+        NSData *data = [self dataForDownloadedFile:location length:NULL];
         [FLEXNetworkObserver.sharedObserver URLSession:session
             task:task didFinishDownloadingToURL:location data:data delegate:slf
         ];
@@ -1747,6 +1771,35 @@ static char const * const kFLEXRequestIDKey = "kFLEXRequestIDKey";
     [self.requestStatesForRequestIDs removeObjectForKey:requestID];
 }
 
+- (void)createDataAccumulatorForRequestState:(FLEXInternalRequestState *)requestState
+                                    response:(NSURLResponse *)response {
+    // Don't accumulate response bodies the recorder will never cache
+    if ([FLEXNetworkRecorder.defaultRecorder shouldCacheResponseBodyForMIMEType:response.MIMEType]) {
+        requestState.dataAccumulator = [NSMutableData new];
+        requestState.dataAccumulationDisabled = NO;
+    } else {
+        requestState.dataAccumulator = nil;
+        requestState.dataAccumulationDisabled = YES;
+    }
+}
+
+- (void)accumulateData:(NSData *)data forRequestState:(FLEXInternalRequestState *)requestState {
+    if (!requestState.dataAccumulator || data.length == 0) {
+        return;
+    }
+
+    // A body over the cache limit will never be cached, and a truncated body
+    // is not useful, so drop the accumulator once it grows past the limit
+    NSUInteger cacheLimit = FLEXNetworkRecorder.defaultRecorder.responseCacheByteLimit;
+    if (cacheLimit > 0 && requestState.dataAccumulator.length + data.length > cacheLimit) {
+        requestState.dataAccumulator = nil;
+        requestState.dataAccumulationDisabled = YES;
+        return;
+    }
+
+    [requestState.dataAccumulator appendData:data];
+}
+
 @end
 
 
@@ -1780,7 +1833,7 @@ didReceiveResponse:(NSURLResponse *)response
     [self performBlock:^{
         NSString *requestID = [[self class] requestIDForConnectionOrTask:connection];
         FLEXInternalRequestState *requestState = [self requestStateForRequestID:requestID];
-        requestState.dataAccumulator = [NSMutableData new];
+        [self createDataAccumulatorForRequestState:requestState response:response];
 
         [FLEXNetworkRecorder.defaultRecorder
             recordResponseReceivedWithRequestID:requestID
@@ -1797,8 +1850,8 @@ didReceiveResponse:(NSURLResponse *)response
     [self performBlock:^{
         NSString *requestID = [[self class] requestIDForConnectionOrTask:connection];
         FLEXInternalRequestState *requestState = [self requestStateForRequestID:requestID];
-        [requestState.dataAccumulator appendData:data];
-        
+        [self accumulateData:data forRequestState:requestState];
+
         [FLEXNetworkRecorder.defaultRecorder
             recordDataReceivedWithRequestID:requestID
             dataLength:data.length
@@ -1880,7 +1933,7 @@ didReceiveResponse:(NSURLResponse *)response
     [self performBlock:^{
         NSString *requestID = [[self class] requestIDForConnectionOrTask:dataTask];
         FLEXInternalRequestState *requestState = [self requestStateForRequestID:requestID];
-        requestState.dataAccumulator = [NSMutableData new];
+        [self createDataAccumulatorForRequestState:requestState response:response];
 
         NSString *requestMechanism = [NSString stringWithFormat:
             @"NSURLSessionDataTask (delegate: %@)", [delegate class]
@@ -1922,10 +1975,10 @@ didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask
         // Fix for "Response body not in cache" issue reported by developers
         // See this github comment for detailed explanation on why this happens
         // https://github.com/FLEXTool/FLEX/issues/568#issuecomment-1141015572
-        if (requestState.dataAccumulator == nil) {
+        if (requestState.dataAccumulator == nil && !requestState.dataAccumulationDisabled) {
             requestState.dataAccumulator = [NSMutableData new];
         }
-        [requestState.dataAccumulator appendData:data];
+        [self accumulateData:data forRequestState:requestState];
 
         [FLEXNetworkRecorder.defaultRecorder
             recordDataReceivedWithRequestID:requestID
@@ -1967,8 +2020,8 @@ totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite
         NSString *requestID = [[self class] requestIDForConnectionOrTask:downloadTask];
         FLEXInternalRequestState *requestState = [self requestStateForRequestID:requestID];
 
-        if (!requestState.dataAccumulator) {
-            requestState.dataAccumulator = [NSMutableData new];
+        if (!requestState.dataAccumulator && !requestState.dataAccumulationDisabled) {
+            [self createDataAccumulatorForRequestState:requestState response:downloadTask.response];
             [FLEXNetworkRecorder.defaultRecorder
                 recordResponseReceivedWithRequestID:requestID
                 response:downloadTask.response
@@ -1998,7 +2051,7 @@ didFinishDownloadingToURL:(NSURL *)location data:(NSData *)data
     [self performBlock:^{
         NSString *requestID = [[self class] requestIDForConnectionOrTask:downloadTask];
         FLEXInternalRequestState *requestState = [self requestStateForRequestID:requestID];
-        [requestState.dataAccumulator appendData:data];
+        [self accumulateData:data forRequestState:requestState];
     }];
 }
 

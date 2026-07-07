@@ -13,6 +13,8 @@
 #import "FLEXUtility.h"
 #import "UIBarButtonItem+FLEX.h"
 
+NSInteger const kFLEXTableContentPageSize = 500;
+
 @interface FLEXTableContentViewController () <
     FLEXMultiColumnTableViewDataSource, FLEXMultiColumnTableViewDelegate
 >
@@ -21,8 +23,10 @@
 @property (nonatomic, readonly) NSString *tableName;
 @property (nonatomic, nullable) NSMutableArray<NSString *> *rowIDs;
 @property (nonatomic, readonly, nullable) id<FLEXDatabaseManager> databaseManager;
+@property (nonatomic) NSInteger totalRowCount;
 
 @property (nonatomic, readonly) BOOL canRefresh;
+@property (nonatomic, readonly) BOOL canLoadMoreRows;
 
 @property (nonatomic) FLEXMultiColumnTableView *multiColumnView;
 @end
@@ -78,7 +82,8 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = self.tableName;
+    [self refreshTotalRowCount];
+    [self updateTitle];
     [self.multiColumnView reloadData];
     [self setupToolbarItems];
 }
@@ -98,6 +103,12 @@
 
 - (BOOL)canRefresh {
     return self.databaseManager && self.tableName;
+}
+
+- (BOOL)canLoadMoreRows {
+    return self.canRefresh &&
+        (NSInteger)self.rows.count < self.totalRowCount &&
+        [self.databaseManager respondsToSelector:@selector(queryDataInTable:limit:offset:)];
 }
 
 #pragma mark MultiColumnTableView DataSource
@@ -262,12 +273,15 @@
     
     UIBarButtonItem *trashButton = FLEXBarButtonItemSystem(Trash, self, @selector(trashPressed));
     UIBarButtonItem *addButton = FLEXBarButtonItemSystem(Add, self, @selector(addPressed));
+    UIBarButtonItem *loadMoreButton = FLEXBarButtonItem(@"Load More", self, @selector(loadMorePressed));
 
     // Only allow adding rows or deleting rows if we have a table name
     trashButton.enabled = self.canRefresh;
     addButton.enabled = self.canRefresh;
-    
+    loadMoreButton.enabled = self.canLoadMoreRows;
+
     self.toolbarItems = @[
+        loadMoreButton,
         UIBarButtonItem.flex_flexibleSpace,
         addButton,
         UIBarButtonItem.flex_flexibleSpace,
@@ -318,6 +332,29 @@
     } showFrom:self];
 }
 
+- (void)loadMorePressed {
+    if (!self.canLoadMoreRows) {
+        return;
+    }
+
+    NSInteger offset = self.rows.count;
+    NSArray<NSArray *> *rows = [self.databaseManager
+        queryDataInTable:self.tableName limit:kFLEXTableContentPageSize offset:offset
+    ];
+    [self.rows addObjectsFromArray:rows];
+
+    if ([self.databaseManager respondsToSelector:@selector(queryRowIDsInTable:limit:offset:)]) {
+        NSArray<NSString *> *rowIDs = [self.databaseManager
+            queryRowIDsInTable:self.tableName limit:kFLEXTableContentPageSize offset:offset
+        ];
+        [self.rowIDs addObjectsFromArray:rowIDs];
+    }
+
+    [self updateTitle];
+    [self setupToolbarItems];
+    [self.multiColumnView reloadData];
+}
+
 #pragma mark - Helpers
 
 - (void)executeStatementAndShowResult:(NSString *)statement
@@ -345,15 +382,45 @@
         return;
     }
 
-    NSArray<NSArray *> *rows = [self.databaseManager queryAllDataInTable:self.tableName];
+    NSInteger limit = MAX((NSInteger)self.rows.count, kFLEXTableContentPageSize);
+    NSArray<NSArray *> *rows = nil;
+    if ([self.databaseManager respondsToSelector:@selector(queryDataInTable:limit:offset:)]) {
+        rows = [self.databaseManager queryDataInTable:self.tableName limit:limit offset:0];
+    } else {
+        rows = [self.databaseManager queryAllDataInTable:self.tableName];
+    }
+
     NSArray<NSString *> *rowIDs = nil;
-    if ([self.databaseManager respondsToSelector:@selector(queryRowIDsInTable:)]) {
+    if ([self.databaseManager respondsToSelector:@selector(queryRowIDsInTable:limit:offset:)]) {
+        rowIDs = [self.databaseManager queryRowIDsInTable:self.tableName limit:limit offset:0];
+    } else if ([self.databaseManager respondsToSelector:@selector(queryRowIDsInTable:)]) {
         rowIDs = [self.databaseManager queryRowIDsInTable:self.tableName];
     }
 
     self.rows = rows.mutableCopy;
     self.rowIDs = rowIDs.mutableCopy;
+    [self refreshTotalRowCount];
+    [self updateTitle];
+    [self setupToolbarItems];
     [self.multiColumnView reloadData];
+}
+
+- (void)refreshTotalRowCount {
+    if (self.canRefresh && [self.databaseManager respondsToSelector:@selector(rowCountInTable:)]) {
+        self.totalRowCount = [self.databaseManager rowCountInTable:self.tableName];
+    } else {
+        self.totalRowCount = self.rows.count;
+    }
+}
+
+- (void)updateTitle {
+    if (self.tableName && self.totalRowCount > (NSInteger)self.rows.count) {
+        self.title = [NSString stringWithFormat:@"%@ (%@ of %@ rows)",
+            self.tableName, @(self.rows.count), @(self.totalRowCount)
+        ];
+    } else {
+        self.title = self.tableName;
+    }
 }
 
 @end
