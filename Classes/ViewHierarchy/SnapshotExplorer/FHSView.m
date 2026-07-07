@@ -93,13 +93,16 @@
     }
 
     CGSize size = view.bounds.size;
-    CGFloat minUnit = 1.f / UIScreen.mainScreen.scale;
+    // Snapshots are rendered at 1x; the 3D scene never displays
+    // them at native resolution, and this keeps memory usage down
+    CGFloat scale = 1.f;
+    CGFloat minUnit = 1.f / scale;
 
     // Every drawn view must not have 0 width or height
     CGSize minsize = CGSizeMake(MAX(size.width, minUnit), MAX(size.height, minUnit));
     CGRect minBounds = CGRectMake(0, 0, minsize.width, minsize.height);
 
-    UIGraphicsBeginImageContextWithOptions(minsize, NO, 0);
+    UIGraphicsBeginImageContextWithOptions(minsize, NO, scale);
     [view drawViewHierarchyInRect:minBounds afterScreenUpdates:YES];
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
@@ -168,7 +171,11 @@
     [self hideViewsCoveringView:view doWhileHidden:^{
         image = [self drawView:view];
         CGRect cropRect = [view.window convertRect:view.bounds fromView:view];
-        image = [UIImage imageWithCGImage:CGImageCreateWithImageInRect(image.CGImage, cropRect)];
+        CGImageRef croppedImage = CGImageCreateWithImageInRect(image.CGImage, cropRect);
+        if (croppedImage) {
+            image = [UIImage imageWithCGImage:croppedImage];
+            CGImageRelease(croppedImage);
+        }
     }];
 
     return image;

@@ -134,6 +134,30 @@ BOOL const kFHSViewControllerExcludeFLEXWindows = YES;
     }
 }
 
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+
+    // Snapshot images and scene nodes are very memory-hungry, so we
+    // discard them whenever this screen goes away and regenerate
+    // them in viewDidAppear: the next time it is shown
+    [self discardSnapshots];
+}
+
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+
+    if (!self.viewIfLoaded.window) {
+        [self discardSnapshots];
+    }
+}
+
+- (void)discardSnapshots {
+    [_snapshotView removeFromSuperview];
+    _snapshotView = nil;
+    self.snapshots = nil;
+    self.toolbarItems = nil;
+}
+
 
 #pragma mark - Public
 
