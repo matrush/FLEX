@@ -22,6 +22,13 @@
 /// The key window of the app, if it is not a \c FLEXWindow.
 /// If it is, then \c FLEXWindow.previousKeyWindow is returned.
 @property (nonatomic, readonly, class) UIWindow *appKeyWindow;
+/// The current key window, which may be a \c FLEXWindow.
+/// Replaces the deprecated \c UIApplication.keyWindow by searching
+/// the connected scenes' windows on iOS 13+.
+@property (nonatomic, readonly, class) UIWindow *firstKeyWindow;
+/// The application's windows, gathered from the connected scenes on
+/// iOS 13+. Replaces the deprecated \c UIApplication.windows property.
+@property (nonatomic, readonly, class) NSArray<UIWindow *> *applicationWindows;
 /// @return the result of +[UIWindow allWindowsIncludingInternalWindows:onlyVisibleWindows:]
 @property (nonatomic, readonly, class) NSArray<UIWindow *> *allWindows;
 /// The first active \c UIWindowScene of the app.
@@ -34,6 +41,14 @@
 + (NSString *)stringForCGRect:(CGRect)rect;
 + (UIViewController *)viewControllerForView:(UIView *)view;
 + (UIViewController *)viewControllerForAncestralView:(UIView *)view;
+/// Draws an image of the given size using \c UIGraphicsImageRenderer on
+/// iOS 10+, falling back to the deprecated \c UIGraphicsBeginImageContextWithOptions
+/// on iOS 9. The current UIKit graphics context is valid inside the block.
+/// @param scale pass 0 to use the device's screen scale
++ (UIImage *)imageWithSize:(CGSize)size
+                    opaque:(BOOL)opaque
+                     scale:(CGFloat)scale
+                   drawing:(void (NS_NOESCAPE ^)(CGContextRef context))drawing;
 + (UIImage *)previewImageForView:(UIView *)view;
 + (UIImage *)previewImageForLayer:(CALayer *)layer;
 + (NSString *)detailDescriptionForView:(UIView *)view;

@@ -549,7 +549,7 @@ static UITextField *kDummyTextField = nil;
     }
     
     kDummyTextField.inputAccessoryView = self.searchController.searchBar.inputAccessoryView;
-    [UIApplication.sharedApplication.keyWindow addSubview:kDummyTextField];
+    [FLEXUtility.firstKeyWindow addSubview:kDummyTextField];
     [kDummyTextField becomeFirstResponder];
 }
 

@@ -89,10 +89,10 @@
     if (@available(iOS 13.0, *)) {
         return UIColor.systemBlueColor;
     } else {
-        return UIApplication.sharedApplication.keyWindow.tintColor;
+        return FLEXUtility.firstKeyWindow.tintColor;
     }
     #else
-    return UIApplication.sharedApplication.keyWindow.tintColor;
+    return FLEXUtility.firstKeyWindow.tintColor;
     #endif
 }
 

@@ -13,7 +13,7 @@
 #import "FLEXColor.h"
 #import "NSUserDefaults+FLEX.h"
 
-@interface FLEXNetworkSettingsController () <UIActionSheetDelegate>
+@interface FLEXNetworkSettingsController ()
 @property (nonatomic) float cacheLimitValue;
 @property (nonatomic, readonly) NSString *cacheLimitCellTitle;
 

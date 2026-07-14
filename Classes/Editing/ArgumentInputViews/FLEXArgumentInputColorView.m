@@ -123,19 +123,14 @@
     CGSize squareSize = CGSizeMake(kSquareDimension, kSquareDimension);
     CGSize imageSize = CGSizeMake(2.0 * kSquareDimension, 2.0 * kSquareDimension);
     
-    UIGraphicsBeginImageContextWithOptions(imageSize, YES, FLEXScreen().scale);
-    
-    [UIColor.whiteColor setFill];
-    UIRectFill(CGRectMake(0, 0, imageSize.width, imageSize.height));
-    
-    [UIColor.grayColor setFill];
-    UIRectFill(CGRectMake(squareSize.width, 0, squareSize.width, squareSize.height));
-    UIRectFill(CGRectMake(0, squareSize.height, squareSize.width, squareSize.height));
-    
-    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    
-    return image;
+    return [FLEXUtility imageWithSize:imageSize opaque:YES scale:FLEXScreen().scale drawing:^(CGContextRef context) {
+        [UIColor.whiteColor setFill];
+        UIRectFill(CGRectMake(0, 0, imageSize.width, imageSize.height));
+
+        [UIColor.grayColor setFill];
+        UIRectFill(CGRectMake(squareSize.width, 0, squareSize.width, squareSize.height));
+        UIRectFill(CGRectMake(0, squareSize.height, squareSize.width, squareSize.height));
+    }];
 }
 
 @end

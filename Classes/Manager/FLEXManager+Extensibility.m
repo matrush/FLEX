@@ -245,7 +245,7 @@
 }
 
 - (UIViewController *)topViewController {
-    return [FLEXUtility topViewControllerInWindow:UIApplication.sharedApplication.keyWindow];
+    return [FLEXUtility topViewControllerInWindow:FLEXUtility.firstKeyWindow];
 }
 
 - (void)toggleTopViewControllerOfClass:(Class)class {

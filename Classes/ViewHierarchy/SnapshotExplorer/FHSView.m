@@ -99,11 +99,9 @@
     CGSize minsize = CGSizeMake(MAX(size.width, minUnit), MAX(size.height, minUnit));
     CGRect minBounds = CGRectMake(0, 0, minsize.width, minsize.height);
 
-    UIGraphicsBeginImageContextWithOptions(minsize, NO, 0);
-    [view drawViewHierarchyInRect:minBounds afterScreenUpdates:YES];
-    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    return image;
+    return [FLEXUtility imageWithSize:minsize opaque:NO scale:0 drawing:^(CGContextRef context) {
+        [view drawViewHierarchyInRect:minBounds afterScreenUpdates:YES];
+    }];
 }
 
 /// Recursively hides all views that may be obscuring the given view and collects them
