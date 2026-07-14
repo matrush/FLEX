@@ -93,7 +93,7 @@
     }
 
     CGSize size = view.bounds.size;
-    CGFloat minUnit = 1.f / UIScreen.mainScreen.scale;
+    CGFloat minUnit = 1.f / FLEXScreen().scale;
 
     // Every drawn view must not have 0 width or height
     CGSize minsize = CGSizeMake(MAX(size.width, minUnit), MAX(size.height, minUnit));

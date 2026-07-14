@@ -7,6 +7,7 @@
 //
 
 #import "FLEXResources.h"
+#import "FLEXMacros.h"
 
 // Useful regex for formatting pasted hex
 //
@@ -8693,8 +8694,8 @@ static const u_int8_t FLEXHierarchyIndentPattern3x[] = {
 @implementation FLEXResources
 
 #define FLEXImage(base) ( \
-    (UIScreen.mainScreen.scale > 1.5) ? \
-        ( (UIScreen.mainScreen.scale > 2.5) ? \
+    (FLEXScreen().scale > 1.5) ? \
+        ( (FLEXScreen().scale > 2.5) ? \
             [self imageWithBytesNoCopy:(void *)base##3x length:sizeof(base##3x) scale:3.0] : \
             [self imageWithBytesNoCopy:(void *)base##2x length:sizeof(base##2x) scale:2.0] \
         ) : \

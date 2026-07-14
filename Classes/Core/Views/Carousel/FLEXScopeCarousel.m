@@ -100,7 +100,7 @@ NSString * const kCarouselCellReuseIdentifier = @"kCarouselCellReuseIdentifier";
 - (void)drawRect:(CGRect)rect {
     [super drawRect:rect];
 
-    CGFloat width = 1.f / UIScreen.mainScreen.scale;
+    CGFloat width = 1.f / FLEXScreen().scale;
 
     // Draw hairline
     CGContextRef context = UIGraphicsGetCurrentContext();

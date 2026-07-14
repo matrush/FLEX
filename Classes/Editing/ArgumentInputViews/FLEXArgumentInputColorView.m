@@ -123,7 +123,7 @@
     CGSize squareSize = CGSizeMake(kSquareDimension, kSquareDimension);
     CGSize imageSize = CGSizeMake(2.0 * kSquareDimension, 2.0 * kSquareDimension);
     
-    UIGraphicsBeginImageContextWithOptions(imageSize, YES, UIScreen.mainScreen.scale);
+    UIGraphicsBeginImageContextWithOptions(imageSize, YES, FLEXScreen().scale);
     
     [UIColor.whiteColor setFill];
     UIRectFill(CGRectMake(0, 0, imageSize.width, imageSize.height));
