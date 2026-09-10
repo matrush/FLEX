@@ -35,6 +35,10 @@ typedef NS_ENUM(NSUInteger, FLEXNetworkTransactionKind) {
 /// with an "image", "video", or "audio" prefix.
 @property (nonatomic) BOOL shouldCacheMediaResponses;
 
+/// Whether a response body with the given MIME type would be cached,
+/// per \c shouldCacheMediaResponses. Does not consider the body's size.
+- (BOOL)shouldCacheResponseBodyForMIMEType:(NSString *)mimeType;
+
 @property (nonatomic) NSMutableArray<NSString *> *hostDenylist;
 
 /// Call this after adding to or setting the \c hostDenylist to remove excluded transactions

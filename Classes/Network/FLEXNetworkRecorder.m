@@ -51,7 +51,6 @@ NSString *const kFLEXNetworkRecorderResponseCacheLimitDefaultsKey = @"com.flex.r
         
         // Default to 25 MB max. The cache will purge earlier if there is memory pressure.
         self.restCache.totalCostLimit = responseCacheLimit ?: 25 * 1024 * 1024;
-        [self.restCache setTotalCostLimit:responseCacheLimit];
         
         self.orderedWSTransactions = [NSMutableArray new];
         self.orderedHTTPTransactions = [NSMutableArray new];
@@ -88,6 +87,19 @@ NSString *const kFLEXNetworkRecorderResponseCacheLimitDefaultsKey = @"com.flex.r
         setObject:@(responseCacheByteLimit)
         forKey:kFLEXNetworkRecorderResponseCacheLimitDefaultsKey
     ];
+}
+
+- (BOOL)shouldCacheResponseBodyForMIMEType:(NSString *)mimeType {
+    if (!self.shouldCacheMediaResponses) {
+        NSArray<NSString *> *ignoredMIMETypePrefixes = @[ @"audio", @"image", @"video" ];
+        for (NSString *ignoredPrefix in ignoredMIMETypePrefixes) {
+            if ([mimeType hasPrefix:ignoredPrefix]) {
+                return NO;
+            }
+        }
+    }
+
+    return YES;
 }
 
 - (NSArray<FLEXHTTPTransaction *> *)HTTPTransactions {
@@ -246,14 +258,12 @@ NSString *const kFLEXNetworkRecorderResponseCacheLimitDefaultsKey = @"com.flex.r
         transaction.state = FLEXNetworkTransactionStateFinished;
         transaction.duration = -[transaction.startTime timeIntervalSinceDate:finishedDate];
 
-        BOOL shouldCache = responseBody.length > 0;
-        if (!self.shouldCacheMediaResponses) {
-            NSArray<NSString *> *ignoredMIMETypePrefixes = @[ @"audio", @"image", @"video" ];
-            for (NSString *ignoredPrefix in ignoredMIMETypePrefixes) {
-                shouldCache = shouldCache && ![transaction.response.MIMEType hasPrefix:ignoredPrefix];
-            }
-        }
-        
+        // A single body over the cache limit would evict every other cached body
+        NSUInteger cacheLimit = self.restCache.totalCostLimit;
+        BOOL shouldCache = responseBody.length > 0
+            && (cacheLimit == 0 || responseBody.length <= cacheLimit)
+            && [self shouldCacheResponseBodyForMIMEType:transaction.response.MIMEType];
+
         if (shouldCache) {
             [self.restCache setObject:responseBody forKey:requestID cost:responseBody.length];
         }

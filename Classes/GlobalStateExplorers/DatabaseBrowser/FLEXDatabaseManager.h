@@ -32,4 +32,11 @@
 - (NSArray<NSString *> *)queryRowIDsInTable:(NSString *)tableName;
 - (FLEXSQLResult *)executeStatement:(NSString *)SQLStatement;
 
+/// @return the total number of rows in the given table
+- (NSInteger)rowCountInTable:(NSString *)tableName;
+/// Paged variant of \c queryAllDataInTable:
+- (NSArray<NSArray *> *)queryDataInTable:(NSString *)tableName limit:(NSInteger)limit offset:(NSInteger)offset;
+/// Paged variant of \c queryRowIDsInTable:
+- (NSArray<NSString *> *)queryRowIDsInTable:(NSString *)tableName limit:(NSInteger)limit offset:(NSInteger)offset;
+
 @end

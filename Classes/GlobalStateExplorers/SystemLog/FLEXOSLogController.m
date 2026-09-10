@@ -170,10 +170,11 @@ static uint8_t (*OSLogGetType)(void *);
             // Get log message text
             // https://github.com/limneos/oslog/issues/1
             // https://github.com/FLEXTool/FLEX/issues/564
-            const char *messageText = OSLogCopyFormattedMessage(log_message) ?: "";
-
-            // move messageText from stack to heap
-            NSString *msg = [NSString stringWithUTF8String:messageText];
+            char *messageText = OSLogCopyFormattedMessage(log_message);
+            NSString *msg = [NSString stringWithUTF8String:messageText ?: ""];
+            if (messageText) {
+                free(messageText);
+            }
 
             dispatch_async(dispatch_get_main_queue(), ^{
                 FLEXSystemLogMessage *message = [FLEXSystemLogMessage logMessageFromDate:date text:msg];

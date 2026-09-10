@@ -16,6 +16,8 @@
 
 kQuery(TABLENAMES, @"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
 kQuery(ROWIDS, @"SELECT rowid FROM \"%@\" ORDER BY rowid ASC");
+kQuery(ROWIDS_PAGED, @"SELECT rowid FROM \"%@\" ORDER BY rowid ASC LIMIT %@ OFFSET %@");
+kQuery(ROWCOUNT, @"SELECT COUNT(*) FROM \"%@\"");
 
 @interface FLEXSQLiteDatabaseManager ()
 @property (nonatomic) sqlite3 *db;
@@ -136,7 +138,33 @@ kQuery(ROWIDS, @"SELECT rowid FROM \"%@\" ORDER BY rowid ASC");
 - (NSArray<NSString *> *)queryRowIDsInTable:(NSString *)tableName {
     NSString *command = [NSString stringWithFormat:QUERY_ROWIDS, tableName];
     NSArray<NSArray<NSString *> *> *data = [self executeStatement:command].rows ?: @[];
-    
+
+    return [data flex_mapped:^id(NSArray<NSString *> *obj, NSUInteger idx) {
+        return obj.firstObject;
+    }];
+}
+
+- (NSInteger)rowCountInTable:(NSString *)tableName {
+    NSString *command = [NSString stringWithFormat:QUERY_ROWCOUNT, tableName];
+    NSArray<NSString *> *count = [self executeStatement:command].rows.firstObject;
+    return [count.firstObject integerValue];
+}
+
+- (NSArray<NSArray *> *)queryDataInTable:(NSString *)tableName
+                                   limit:(NSInteger)limit
+                                  offset:(NSInteger)offset {
+    NSString *command = [NSString stringWithFormat:
+        @"SELECT * FROM \"%@\" LIMIT %@ OFFSET %@", tableName, @(limit), @(offset)
+    ];
+    return [self executeStatement:command].rows ?: @[];
+}
+
+- (NSArray<NSString *> *)queryRowIDsInTable:(NSString *)tableName
+                                      limit:(NSInteger)limit
+                                     offset:(NSInteger)offset {
+    NSString *command = [NSString stringWithFormat:QUERY_ROWIDS_PAGED, tableName, @(limit), @(offset)];
+    NSArray<NSArray<NSString *> *> *data = [self executeStatement:command].rows ?: @[];
+
     return [data flex_mapped:^id(NSArray<NSString *> *obj, NSUInteger idx) {
         return obj.firstObject;
     }];
@@ -297,7 +325,7 @@ kQuery(ROWIDS, @"SELECT rowid FROM \"%@\" ORDER BY rowid ASC");
             return  @(sqlite3_column_double(stmt, columnIdx)).stringValue;
         case SQLITE_BLOB:
             return [NSString stringWithFormat:@"Data (%@ bytes)",
-                @([self dataForColumnIndex:columnIdx stmt:stmt].length)
+                @(sqlite3_column_bytes(stmt, columnIdx))
             ];
             
         default:
@@ -313,17 +341,6 @@ kQuery(ROWIDS, @"SELECT rowid FROM \"%@\" ORDER BY rowid ASC");
     
     const char *text = (const char *)sqlite3_column_text(stmt, columnIdx);
     return text ? @(text) : nil;
-}
-
-- (NSData *)dataForColumnIndex:(int)columnIdx stmt:(sqlite3_stmt *)stmt {
-    if (sqlite3_column_type(stmt, columnIdx) == SQLITE_NULL || (columnIdx < 0)) {
-        return nil;
-    }
-    
-    const void *blob = sqlite3_column_blob(stmt, columnIdx);
-    NSInteger size = (NSInteger)sqlite3_column_bytes(stmt, columnIdx);
-    
-    return blob ? [NSData dataWithBytes:blob length:size] : nil;
 }
 
 @end

@@ -26,6 +26,10 @@ typedef NS_ENUM(NSUInteger, FLEXFileBrowserSortAttribute) {
     FLEXFileBrowserSortAttributeCreationDate,
 };
 
+/// Files larger than this are not parsed or displayed in-memory;
+/// they can still be shared or opened by path-based viewers.
+static const unsigned long long kFLEXFileBrowserMaxPreviewSize = 1024 * 1024;
+
 @interface FLEXFileBrowserController () <FLEXFileBrowserSearchOperationDelegate>
 
 @property (nonatomic, copy) NSString *path;
@@ -209,7 +213,16 @@ typedef NS_ENUM(NSUInteger, FLEXFileBrowserSortAttribute) {
     UITableViewCell *cell = nil;
 
     // Separate image and text only cells because otherwise the separator lines get out-of-whack on image cells reused with text only.
-    UIImage *image = [UIImage imageWithContentsOfFile:fullPath];
+    UIImage *image = nil;
+    if (!isDirectory && [self isImagePathExtension:fullPath.pathExtension]) {
+        NSData *imageData = [NSData
+            dataWithContentsOfFile:fullPath options:NSDataReadingMappedIfSafe error:NULL
+        ];
+        if (imageData.length) {
+            NSInteger dimension = (NSInteger)(50 * UIScreen.mainScreen.scale);
+            image = [FLEXUtility thumbnailedImageWithMaxPixelDimension:dimension fromImageData:imageData];
+        }
+    }
     NSString *cellIdentifier = image ? imageCellIdentifier : textCellIdentifier;
 
     if (!cell) {
@@ -253,41 +266,49 @@ typedef NS_ENUM(NSUInteger, FLEXFileBrowserSortAttribute) {
     if (isDirectory) {
         drillInViewController = [[[self class] alloc] initWithPath:fullPath];
     } else if (image) {
-        drillInViewController = [FLEXImagePreviewViewController forImage:image];
+        UIImage *fullImage = [UIImage imageWithContentsOfFile:fullPath] ?: image;
+        drillInViewController = [FLEXImagePreviewViewController forImage:fullImage];
     } else {
-        NSData *fileData = [NSData dataWithContentsOfFile:fullPath];
+        NSData *fileData = [NSData
+            dataWithContentsOfFile:fullPath options:NSDataReadingMappedIfSafe error:NULL
+        ];
         if (!fileData.length) {
             [FLEXAlert showAlert:@"Empty File" message:@"No data returned from the file." from:self];
             return;
         }
 
+        BOOL smallEnoughToPreview = fileData.length <= kFLEXFileBrowserMaxPreviewSize;
+
         // Special case keyed archives, json, and plists to get more readable data.
         NSString *prettyString = nil;
-        if ([pathExtension isEqualToString:@"json"]) {
+        if (smallEnoughToPreview && [pathExtension isEqualToString:@"json"]) {
             prettyString = [FLEXUtility prettyJSONStringFromData:fileData];
         } else {
-            // Try to decode an archived object, regardless of file extension
-            NSKeyedUnarchiver *unarchiver = ({
-                NSKeyedUnarchiver *obj = nil;
-                if (@available(iOS 12.0, *)) {
-                    obj = [[NSKeyedUnarchiver alloc] initForReadingFromData:fileData error:nil];
-                } else {
-                    obj = [[NSKeyedUnarchiver alloc] initForReadingWithData:fileData];
-                }
-                obj.requiresSecureCoding = NO;
-                obj;
-            });
-            id object = [unarchiver decodeObjectForKey:NSKeyedArchiveRootObjectKey];
+            id object = nil;
+            if (smallEnoughToPreview) {
+                // Try to decode an archived object, regardless of file extension
+                NSKeyedUnarchiver *unarchiver = ({
+                    NSKeyedUnarchiver *obj = nil;
+                    if (@available(iOS 12.0, *)) {
+                        obj = [[NSKeyedUnarchiver alloc] initForReadingFromData:fileData error:nil];
+                    } else {
+                        obj = [[NSKeyedUnarchiver alloc] initForReadingWithData:fileData];
+                    }
+                    obj.requiresSecureCoding = NO;
+                    obj;
+                });
+                object = [unarchiver decodeObjectForKey:NSKeyedArchiveRootObjectKey];
 
-            // Try to decode other things instead
-            object = object ?: [NSPropertyListSerialization
-                propertyListWithData:fileData
-                options:0
-                format:NULL
-                error:NULL
-            ] ?: [NSDictionary dictionaryWithContentsOfFile:fullPath]
-              ?: [NSArray arrayWithContentsOfFile:fullPath];
-            
+                // Try to decode other things instead
+                object = object ?: [NSPropertyListSerialization
+                    propertyListWithData:fileData
+                    options:0
+                    format:NULL
+                    error:NULL
+                ] ?: [NSDictionary dictionaryWithContentsOfFile:fullPath]
+                  ?: [NSArray arrayWithContentsOfFile:fullPath];
+            }
+
             if (object) {
                 drillInViewController = [FLEXObjectExplorerFactory explorerViewControllerForObject:object];
             } else {
@@ -322,8 +343,8 @@ typedef NS_ENUM(NSUInteger, FLEXFileBrowserSortAttribute) {
         } else if ([FLEXTableListViewController supportsExtension:pathExtension]) {
             drillInViewController = [[FLEXTableListViewController alloc] initWithPath:fullPath];
         }
-        else if (!drillInViewController) {
-            NSString *fileString = [NSString stringWithUTF8String:fileData.bytes];
+        else if (!drillInViewController && smallEnoughToPreview) {
+            NSString *fileString = [[NSString alloc] initWithData:fileData encoding:NSUTF8StringEncoding];
             if (fileString.length) {
                 drillInViewController = [[FLEXWebViewController alloc] initWithText:fileString];
             }
@@ -533,6 +554,19 @@ contextMenuConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath
 
 - (NSString *)filePathAtIndexPath:(NSIndexPath *)indexPath {
     return self.searchController.isActive ? self.searchPaths[indexPath.row] : self.childPaths[indexPath.row];
+}
+
+- (BOOL)isImagePathExtension:(NSString *)extension {
+    static NSSet<NSString *> *imageExtensions = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        imageExtensions = [NSSet<NSString *> setWithArray:@[
+            @"png", @"jpg", @"jpeg", @"gif", @"bmp",
+            @"tiff", @"tif", @"heic", @"heif", @"webp", @"ico"
+        ]];
+    });
+
+    return [imageExtensions containsObject:extension.lowercaseString];
 }
 
 @end

@@ -69,10 +69,17 @@
     ];
     
     self.tables.selectionHandler = ^(FLEXTableListViewController *host, NSString *tableName) {
-        NSArray *rows = [host.dbm queryAllDataInTable:tableName];
+        NSArray *rows = nil;
+        if ([host.dbm respondsToSelector:@selector(queryDataInTable:limit:offset:)]) {
+            rows = [host.dbm queryDataInTable:tableName limit:kFLEXTableContentPageSize offset:0];
+        } else {
+            rows = [host.dbm queryAllDataInTable:tableName];
+        }
         NSArray *columns = [host.dbm queryAllColumnsOfTable:tableName];
         NSArray *rowIDs = nil;
-        if ([host.dbm respondsToSelector:@selector(queryRowIDsInTable:)]) {        
+        if ([host.dbm respondsToSelector:@selector(queryRowIDsInTable:limit:offset:)]) {
+            rowIDs = [host.dbm queryRowIDsInTable:tableName limit:kFLEXTableContentPageSize offset:0];
+        } else if ([host.dbm respondsToSelector:@selector(queryRowIDsInTable:)]) {
             rowIDs = [host.dbm queryRowIDsInTable:tableName];
         }
         UIViewController *resultsScreen = [FLEXTableContentViewController

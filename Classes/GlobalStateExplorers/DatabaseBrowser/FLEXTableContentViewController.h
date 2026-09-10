@@ -11,6 +11,9 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// The maximum number of rows to load from a table at once
+extern NSInteger const kFLEXTableContentPageSize;
+
 @interface FLEXTableContentViewController : UIViewController
 
 /// Display a mutable table with the given columns, rows, and name.
